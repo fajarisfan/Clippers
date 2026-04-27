@@ -2,3 +2,6 @@ ffmpeg
 fonts-liberation
 fonts-dejavu-core
 libsndfile1
+zlib1g-dev
+libjpeg-dev
+libpng-dev

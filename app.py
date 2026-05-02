@@ -1,3 +1,9 @@
+# ╔══════════════════════════════════════════════════════════════╗
+# ║         HORROR PODCAST CLIPPER — YouTube Edition             ║
+# ║  Cloud: upload cookies.txt sekali                            ║
+# ║  PC Lokal: auto-detect cookies Chrome/Firefox                ║
+# ╚══════════════════════════════════════════════════════════════╝
+
 import streamlit as st
 import os, glob, uuid, re, random, subprocess
 from collections import Counter
@@ -43,15 +49,25 @@ if not FONT_PATH:
             break
 
 # ── Horror keywords ──────────────────────────────────────────────
-HORROR_KEYWORDS = [
-    "tiba-tiba","bayangan","hantu","setan","pocong","kuntilanak","genderuwo","wewe",
-    "suara","malam","gelap","takut","lari","teriak","pintu","ketuk","langkah","napas",
-    "muncul","hilang","aneh","mistis","gaib","penampakan","meninggal","mati","darah",
-    "jeritan","menangis","berbisik","panas","dingin","kaku","bulu","kuduk","merinding",
-    "makhluk","sosok","wujud","ritual","santet","guna","kesurupan","憑依","dukun",
-    "kuburan","malam","tengah","sepi","hutan","rumah","kosong","tua","angker","horor",
-    "ghost","shadow","suddenly","scream","blood","dark","fear","spirit","haunted",
-    "whisper","cry","cold","appear","disappear","strange","creature","demon","ritual",
+VIRAL_KEYWORDS = [
+    # Emosi kuat
+    "nangis","ketawa","ngakak","kaget","syok","gila","gokil","parah","haru","lebay",
+    "sedih","senang","bahagia","marah","kesel","baper","terharu","bangga","malu","takjub",
+    # Momen puncak / twist
+    "tiba-tiba","ternyata","padahal","akhirnya","eh","lho","wah","astaga","gilaa","anjir",
+    "serius","beneran","jujur","rahasia","bocor","viral","fakta","ngeri","parah","gokil",
+    # Konflik / drama
+    "berantem","ribut","putus","cerai","selingkuh","khianat","bohong","tipu","fitnah",
+    "ditinggal","sakit hati","dendam","maafin","balikan","ghosting","friendzone","toxic",
+    # Inspiratif / motivasi
+    "bangkit","berjuang","sukses","gagal","jatuh","mimpi","impian","buktikan","mustahil",
+    "nyerah","pantang","semangat","kuat","percaya","diri","optimis","negatif","positif",
+    # Edukasi / fakta menarik
+    "faktanya","tau gak","gue kira","salah kaprah","terbukti","penelitian","studi",
+    "ternyata","ilmiah","pakar","ahli","dokter","psikolog","pengalaman","tips","cara",
+    # Narasi / storytelling
+    "waktu itu","dulu banget","pas gue","gue pernah","suatu hari","sampe","literally",
+    "actually","honestly","seriously","guys","intinya","pointnya","kesimpulannya",
 ]
 
 STOPWORDS = {
@@ -72,14 +88,14 @@ STOPWORDS = {
 }
 
 HOOK_POOL = [
-    "Tonton sampai habis, kalau berani...",
-    "Pasang headset. Jangan nonton sendirian.",
-    "Video ini bikin orang ga bisa tidur.",
-    "Ini bukan fiksi. Ini pengalaman nyata.",
-    "Satu orang udah kabur sebelum selesai nonton.",
-    "Suara di momen ini bikin bulu kuduk berdiri.",
-    "Jangan nonton kalau jantung kamu lemah.",
-    "Cerita ini viral karena terlalu nyata.",
+    "Bagian ini yang paling banyak di-replay...",
+    "Tonton sampai habis, ada yang ngena banget.",
+    "Ini yang bikin jutaan orang relate.",
+    "Momen ini bikin semua orang diam.",
+    "Kalimat ini viral di mana-mana.",
+    "Jujur banget sampe bikin kaget.",
+    "Nonton ini sambil siapin tisu.",
+    "Ini alasan podcast ini meledak.",
 ]
 
 # ════════════════════════════════════════════════════════════════
@@ -140,19 +156,29 @@ def get_video_info(url: str) -> dict:
 
 
 def get_stream_urls(url: str) -> tuple:
-    opts = _ydl_opts({
-        "format": "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/best[height<=720]/best",
-    })
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(url, download=False)
-
+    format_attempts = [
+        "bestvideo[height<=720]+bestaudio/bestvideo+bestaudio",
+        "bestvideo[height<=480]+bestaudio/bestvideo+bestaudio",
+        "best[height<=720]/best",
+        "best",
+    ]
+    info, last_err = None, None
+    for fmt in format_attempts:
+        try:
+            with yt_dlp.YoutubeDL(_ydl_opts({"format": fmt})) as ydl:
+                info = ydl.extract_info(url, download=False)
+            break
+        except Exception as e:
+            last_err = e
+    if info is None:
+        raise RuntimeError(f"Semua format gagal: {last_err}")
     if "requested_formats" in info:
         v_url = next((f["url"] for f in info["requested_formats"] if f.get("vcodec") != "none"), None)
         a_url = next((f["url"] for f in info["requested_formats"] if f.get("acodec") != "none"), None)
         return v_url or info.get("url",""), a_url or v_url or info.get("url","")
-
     direct = info.get("url","")
     return direct, direct
+
 
 
 # ════════════════════════════════════════════════════════════════
@@ -226,7 +252,7 @@ def score_clips(audio_path, segments, duration, n_clips, min_dur, max_dur):
         for seg in segments:
             if seg["end"] < sf or seg["start"] > ef:
                 continue
-            hits = sum(1 for k in HORROR_KEYWORDS if k in seg["text"].lower())
+            hits = sum(1 for k in VIRAL_KEYWORDS if k in seg["text"].lower())
             kw += hits
             if not preview and hits:
                 preview = seg["text"]
@@ -273,7 +299,7 @@ def generate_hashtags(segments: list, title: str) -> str:
         )[:5]
 
         horror_found = list(dict.fromkeys(
-            kw.replace("-","") for kw in HORROR_KEYWORDS
+            kw.replace("-","") for kw in VIRAL_KEYWORDS
             if kw.replace("-","") in freq or kw in full_text.lower()
         ))[:6]
 
@@ -282,9 +308,9 @@ def generate_hashtags(segments: list, title: str) -> str:
                   and w not in specific and w not in horror_found][:3]
 
         universal = [
-            "horrortiktok","hororindonesia","ceritahoror","kisahnyata","mistis","horor",
-            "horror","fyp","fypシ","viral","penelusuran","pengalamanseram",
-            "ghoststory","paranormal","podcasthoror","ceritaseram",
+            "podcast","podcastindonesia","kontenkreatif","fyp","fypシ","viral",
+            "tiktok","reels","shorts","ngobrol","cerita","storytime","motivasi",
+            "inspirasi","edukasi","hiburan","trending","rekomendasipodcast",
         ]
 
         all_tags = (
@@ -325,14 +351,14 @@ def make_grade_fn(style: str):
             f = np.clip((f-128)*1.3+128, 0, 255)
             g = f.mean(axis=2, keepdims=True)
             return np.clip(f*1.15-g*0.15, 0, 255).astype(np.uint8)
-    else:  # horror (default) — biru gelap + desaturate
+    else:  # sinematik (default)
         def fn(f):
             f = f.astype(np.float32)
-            f = np.clip((f-128)*1.25+128, 0, 255)
+            f = np.clip((f-128)*1.2+128, 0, 255)
             g = f.mean(axis=2, keepdims=True)
-            f = f*0.80 + g*0.20
-            f[:,:,0] = np.clip(f[:,:,0]*0.90, 0, 255)
-            f[:,:,2] = np.clip(f[:,:,2]*1.06, 0, 255)
+            f = f*0.85 + g*0.15
+            f[:,:,0] = np.clip(f[:,:,0]*0.94, 0, 255)
+            f[:,:,2] = np.clip(f[:,:,2]*1.04, 0, 255)
             return f.astype(np.uint8)
     return fn
 
@@ -455,7 +481,7 @@ def render_clip(
 
     if use_hook and FONT_PATH:
         h_text = hook_text.strip() or random.choice(HOOK_POOL)
-        tc = _tc(h_text, 48, "#FF3333", 3, 3.5, 960)
+        tc = _tc(h_text, 48, "#FFD700", 3, 3.5, 960)
         if tc:
             layers.append(tc.with_start(0).with_position(("center", 220)))
 
@@ -503,9 +529,9 @@ def render_clip(
 # ════════════════════════════════════════════════════════════════
 #  UI
 # ════════════════════════════════════════════════════════════════
-st.set_page_config(page_title="👻 Horror Podcast Clipper", layout="wide")
-st.title("👻 Horror Podcast Clipper")
-st.caption("Paste link YouTube → AI deteksi momen paling seram → potong langsung → siap upload TikTok/Reels")
+st.set_page_config(page_title="🎙️ Podcast Clipper", layout="wide")
+st.title("🎙️ Podcast Clipper")
+st.caption("Paste link YouTube → AI deteksi momen terbaik → potong langsung → siap upload TikTok/Reels")
 
 # ── Mode badge ───────────────────────────────────────────────────
 if IS_CLOUD:
@@ -557,8 +583,8 @@ with st.sidebar:
     st.divider()
     st.subheader("🎨 Efek Video")
     use_grade   = st.checkbox("Color Grading", value=True)
-    grade_style = st.selectbox("Gaya", ["horror","warm","vibrant","noir"], disabled=not use_grade,
-                                help="horror=biru gelap mencekam | warm=oranye | vibrant=cerah | noir=hitam putih")
+    grade_style = st.selectbox("Gaya", ["sinematik","warm","vibrant","noir"], disabled=not use_grade,
+                                help="sinematik=biru dingin | warm=oranye | vibrant=cerah | noir=hitam putih")
 
     st.divider()
     st.subheader("💬 Auto Subtitle")
@@ -575,7 +601,7 @@ with st.sidebar:
     use_hook    = st.checkbox("Hook Text (3 detik pertama)", value=True)
     custom_hook = st.text_input("Custom hook (kosong = auto)")
     use_bgm     = st.checkbox("BGM Horror", value=False)
-    bgm_upload  = st.file_uploader("Upload BGM horror (.mp3)", type=["mp3"])
+    bgm_upload  = st.file_uploader("Upload BGM (.mp3)", type=["mp3"])
     if bgm_upload:
         with open(BGM_PATH, "wb") as fh:
             fh.write(bgm_upload.read())
@@ -614,8 +640,11 @@ watermark_path = st.session_state.get("watermark")
 
 # Guard: cloud harus ada cookies
 if IS_CLOUD and not os.path.exists(COOKIES_FILE):
-    st.warning("👈 Upload cookies.txt dulu di sidebar sebelum bisa pakai app ini.")
+    st.warning("👈 Upload cookies.txt dulu di sidebar sebelum bisa paste link YouTube.")
+    st.info("Sudah upload tapi masih muncul pesan ini? Coba klik tombol **R** (refresh) di pojok kanan atas Streamlit, atau tutup & buka ulang app.")
     st.stop()
+elif IS_CLOUD and os.path.exists(COOKIES_FILE):
+    pass  # cookies OK, lanjut
 
 st.subheader("🔗 Paste Link YouTube / Podcast")
 
@@ -680,7 +709,7 @@ if "film_title" in st.session_state:
     st.markdown("---")
 
     # Tombol analisis
-    if st.button("🔍 Analisis Momen Paling Seram (AI)", type="primary", use_container_width=True):
+    if st.button("🔍 Analisis Momen Terbaik (AI)", type="primary", use_container_width=True):
         try:
             with st.spinner("📡 Ambil stream URL..."):
                 v_url, a_url = get_stream_urls(url)
@@ -696,7 +725,7 @@ if "film_title" in st.session_state:
                 st.session_state["segs"]  = segs
                 st.session_state["words"] = words
 
-            with st.spinner("👻 Scoring momen paling mencekam..."):
+            with st.spinner("🎯 Scoring momen terbaik..."):
                 suggestions = score_clips(audio_path, segs, min(duration, analyze_max*60),
                                           n_clips, min_dur, max_dur)
                 hashtags    = generate_hashtags(segs, title)
@@ -748,7 +777,7 @@ if "suggestions" in st.session_state and "film_title" in st.session_state:
             cb.caption(" ".join(s["text"] for s in segs)[:600] + "…")
 
     st.markdown("---")
-    st.subheader(f"👻 {len(suggestions)} Momen Paling Seram")
+    st.subheader(f"🎯 {len(suggestions)} Momen Terbaik Ditemukan")
 
     if not suggestions:
         st.warning("Tidak ada momen ditemukan. Coba kurangi durasi minimum atau tambah menit analisis.")
@@ -791,7 +820,7 @@ if "suggestions" in st.session_state and "film_title" in st.session_state:
             ):
                 c1, c2, c3, c4 = st.columns(4)
                 c1.metric("⏱️ Durasi",   f"{int(sug['end']-sug['start'])}s")
-                c2.metric("👻 Keywords", sug["keywords"])
+                c2.metric("🔥 Keywords", sug["keywords"])
                 c3.metric("🔊 Energi",   f"{int(sug['energy']*100)}%")
                 c4.metric("📊 Skor",     f"{score_pct}%")
                 if sug["preview"] != "—":

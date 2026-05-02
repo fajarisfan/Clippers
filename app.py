@@ -178,21 +178,61 @@ def get_stream_urls(url: str) -> tuple:
 # ════════════════════════════════════════════════════════════════
 #  AUDIO — download audio only untuk analisis
 # ════════════════════════════════════════════════════════════════
-def download_audio_only(audio_url: str, duration: float, max_sec: int = 600) -> str:
-    out = os.path.join(TMP_DIR, f"audio_{uuid.uuid4().hex[:6]}.wav")
-    limit = min(duration, max_sec)
-    cmd = [
-        "ffmpeg", "-y",
-        "-user_agent", "Mozilla/5.0",
-        "-i", audio_url,
-        "-t", str(limit),
-        "-vn", "-ar", "16000", "-ac", "1", "-f", "wav",
-        out,
-    ]
-    r = subprocess.run(cmd, capture_output=True, timeout=180)
-    if r.returncode != 0 or not os.path.exists(out):
-        raise RuntimeError(f"ffmpeg gagal: {r.stderr.decode()[:200]}")
-    return out
+def download_audio_only(source_url: str, duration: float, max_sec: int = 600) -> str:
+    """
+    Download audio saja dari YouTube URL menggunakan yt-dlp
+    (bukan ffmpeg langsung — biar auth/cookies ditangani yt-dlp).
+    Hasilnya berupa file WAV 16kHz mono untuk Whisper.
+    """
+    out_base = os.path.join(TMP_DIR, f"audio_{uuid.uuid4().hex[:6]}")
+    out_wav  = out_base + ".wav"
+    limit    = min(duration, max_sec)
+
+    ydl_audio_opts = _ydl_opts({
+        "format":           "bestaudio/best",
+        "outtmpl":          out_base + ".%(ext)s",
+        "quiet":            True,
+        "no_warnings":      True,
+        "postprocessors": [{
+            "key":              "FFmpegExtractAudio",
+            "preferredcodec":   "wav",
+            "preferredquality": "0",
+        }],
+        # Potong hanya max_sec detik pertama
+        "postprocessor_args": {
+            "FFmpegExtractAudio": ["-ar", "16000", "-ac", "1", "-t", str(int(limit))],
+        },
+    })
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_audio_opts) as ydl:
+            ydl.download([source_url])
+    except Exception as e:
+        raise RuntimeError(f"yt-dlp audio download gagal: {e}")
+
+    # yt-dlp kadang simpan sebagai .wav langsung atau perlu cek ekstensi lain
+    if not os.path.exists(out_wav):
+        # Cari file audio apapun yang baru dibuat
+        candidates = glob.glob(out_base + ".*")
+        if not candidates:
+            raise RuntimeError("File audio tidak ditemukan setelah download.")
+        src = candidates[0]
+        if src != out_wav:
+            # Konversi ke wav 16kHz mono via ffmpeg
+            r = subprocess.run(
+                ["ffmpeg", "-y", "-i", src, "-ar", "16000", "-ac", "1", out_wav],
+                capture_output=True, timeout=120
+            )
+            try: os.remove(src)
+            except Exception: pass
+            if r.returncode != 0:
+                raise RuntimeError(f"Konversi wav gagal: {r.stderr.decode()[:200]}")
+
+    if not os.path.exists(out_wav) or os.path.getsize(out_wav) < 1000:
+        raise RuntimeError("File audio kosong atau tidak valid.")
+
+    return out_wav
+
 
 
 # ════════════════════════════════════════════════════════════════
@@ -703,16 +743,19 @@ if "film_title" in st.session_state:
     st.markdown("---")
 
     # Tombol analisis
+    # Tombol analisis
     if st.button("🔍 Analisis Momen Terbaik (AI)", type="primary", use_container_width=True):
         try:
-            with st.spinner("📡 Ambil stream URL..."):
+            with st.spinner(f"⏬ Download audio {analyze_max} menit pertama untuk analisis AI..."):
+                # Langsung pakai YouTube URL — yt-dlp handle auth & cookies
+                audio_path = download_audio_only(url, duration, max_sec=analyze_max*60)
+                st.session_state["audio_path"] = audio_path
+
+            with st.spinner("📡 Ambil stream URL untuk render nanti..."):
                 v_url, a_url = get_stream_urls(url)
                 st.session_state["video_url"] = v_url
                 st.session_state["audio_url"] = a_url
 
-            with st.spinner(f"⏬ Download audio {analyze_max} menit pertama..."):
-                audio_path = download_audio_only(a_url, duration, max_sec=analyze_max*60)
-                st.session_state["audio_path"] = audio_path
 
             with st.spinner(f"🤖 Transkripsi AI ({model_size}) — word-by-word..."):
                 segs, words = transcribe_audio(audio_path, model_size)

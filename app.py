@@ -1,9 +1,3 @@
-# ╔══════════════════════════════════════════════════════════════╗
-# ║         HORROR PODCAST CLIPPER — YouTube Edition             ║
-# ║  Cloud: upload cookies.txt sekali                            ║
-# ║  PC Lokal: auto-detect cookies Chrome/Firefox                ║
-# ╚══════════════════════════════════════════════════════════════╝
-
 import streamlit as st
 import os, glob, uuid, re, random, subprocess
 from collections import Counter

@@ -208,6 +208,13 @@ def download_audio_only(source_url: str, duration: float, max_sec: int = 600) ->
         with yt_dlp.YoutubeDL(ydl_audio_opts) as ydl:
             ydl.download([source_url])
     except Exception as e:
+        err = str(e)
+        if "403" in err or "Forbidden" in err:
+            raise RuntimeError(
+                "403 Forbidden — cookies.txt expired.\n"
+                "Export ulang cookies.txt dari Chrome (buka YouTube → login → export) "
+                "lalu upload lagi di sidebar."
+            )
         raise RuntimeError(f"yt-dlp audio download gagal: {e}")
 
     # yt-dlp kadang simpan sebagai .wav langsung atau perlu cek ekstensi lain

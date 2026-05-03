@@ -27,21 +27,20 @@ for _d in [TMP_DIR, OUTPUT_DIR, WM_DIR]:
 
 # ── Auto-restore cookies dari Streamlit Secrets (permanent) ─────
 def _restore_cookies_from_secrets():
-    """
-    Restore cookies.txt dari Streamlit Secrets setiap app restart.
-    Cara setup: Streamlit Cloud → Settings → Secrets → tambahkan:
-    [cookies]
-    content = \'<isi file cookies.txt kamu>\'
-    """
-    if os.path.exists(COOKIES_FILE):
+    """Restore cookies dari Streamlit Secrets tiap app restart."""
+    if os.path.exists(COOKIES_FILE) and os.path.getsize(COOKIES_FILE) > 100:
         return
     try:
-        content = st.secrets["cookies"]["content"]
-        if content and len(content) > 100:
-            with open(COOKIES_FILE, "w", encoding="utf-8") as fh:
-                fh.write(content)
+        raw = st.secrets["cookies"]["content"]
+        if not raw:
+            return
+        cleaned = raw.strip()
+        if len(cleaned) < 50 or "youtube.com" not in cleaned:
+            return
+        with open(COOKIES_FILE, "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(cleaned)
     except Exception:
-        pass  # belum ada secrets — normal, user bisa upload manual
+        pass
 
 _restore_cookies_from_secrets()
 
@@ -301,19 +300,20 @@ def _ydl_opts(extra: dict = None) -> dict:
 
 
 def get_video_info(url: str) -> dict:
-    """Ambil info video — coba beberapa format agar tidak error format unavailable."""
-    for fmt in ["best[height<=720]", "best", None]:
+    """
+    Ambil metadata video — format bestaudio/best selalu ada kalau cookies valid.
+    """
+    last_err = None
+    for fmt in ["bestaudio/best", "best", "worst"]:
         try:
-            extra = {"format": fmt} if fmt else {}
-            with yt_dlp.YoutubeDL(_ydl_opts(extra)) as ydl:
-                return ydl.extract_info(url, download=False)
+            with yt_dlp.YoutubeDL(_ydl_opts({"format": fmt})) as ydl:
+                info = ydl.extract_info(url, download=False)
+                if info:
+                    return info
         except Exception as e:
-            if "format" in str(e).lower() or "Requested format" in str(e):
-                continue
-            raise
-    # Fallback tanpa format apapun
-    with yt_dlp.YoutubeDL(_ydl_opts()) as ydl:
-        return ydl.extract_info(url, download=False)
+            last_err = e
+            continue
+    raise RuntimeError(str(last_err) if last_err else "Gagal ambil info video.")
 
 
 def get_stream_urls(url: str) -> tuple:

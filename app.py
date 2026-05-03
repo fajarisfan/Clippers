@@ -301,6 +301,17 @@ def _ydl_opts(extra: dict = None) -> dict:
 
 
 def get_video_info(url: str) -> dict:
+    """Ambil info video — coba beberapa format agar tidak error format unavailable."""
+    for fmt in ["best[height<=720]", "best", None]:
+        try:
+            extra = {"format": fmt} if fmt else {}
+            with yt_dlp.YoutubeDL(_ydl_opts(extra)) as ydl:
+                return ydl.extract_info(url, download=False)
+        except Exception as e:
+            if "format" in str(e).lower() or "Requested format" in str(e):
+                continue
+            raise
+    # Fallback tanpa format apapun
     with yt_dlp.YoutubeDL(_ydl_opts()) as ydl:
         return ydl.extract_info(url, download=False)
 

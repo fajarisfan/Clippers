@@ -662,10 +662,11 @@ def render_clip(video_url, audio_url, start, end, segments, words, *,
 # ════════════════════════════════════════════════════════════════
 st.set_page_config(page_title="Clipper Pro", layout="wide", page_icon="🎙️")
 
-# ── CSS Injection — Dark Dashboard Theme ────────────────────────
-st.markdown("""
+# ── CSS Injection via st.html (compatible with Streamlit 1.32+) ──
+_CSS = """
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
+
 /* Base */
 html, body, [class*="css"] { font-family: 'Inter', sans-serif !important; }
 .stApp { background: #0c0c0f !important; }
@@ -822,7 +823,13 @@ hr { border-color: #27272a !important; }
     background: #18181b !important; border-color: #27272a !important; border-radius: 12px !important;
 }
 </style>
-""", unsafe_allow_html=True)
+"""
+try:
+    # st.html() tersedia di Streamlit >= 1.32
+    st.html(_CSS)
+except AttributeError:
+    # Fallback: markdown dengan unsafe_allow_html
+    st.markdown(_CSS, unsafe_allow_html=True)
 
 fyp_info = get_fyp_status()
 now_wib  = fyp_info["now"]

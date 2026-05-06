@@ -1123,35 +1123,50 @@ if "suggestions" in st.session_state and "film_title" in st.session_state:
     hashtags    = generate_hashtags(segs, title)
     caption_fyp = generate_caption_fyp(segs, title, url, fyp_info)
 
-    # Caption & Hashtag tabs
-    with st.container(border=True):
-        t1, t2, t3 = st.tabs(["Caption FYP Siap Pakai","Hashtag","Analisis Niche"])
-        with t1:
-            st.text_area("cap", caption_fyp, height=200, label_visibility="collapsed")
-            st.caption("Salin langsung ke TikTok / Reels / YouTube Shorts")
-            if cw:
-                st.success(f"Sekarang jam FYP — upload sekarang! ({cw['label']})")
-            else:
-                jam_str = f"{nw['range'][0]:02d}:00" if nw else "—"
-                st.info(f"Jadwalkan upload pukul {jam_str} WIB ({nw['label'] if nw else '—'}) untuk hasil terbaik.")
-        with t2:
-            st.text_area("ht", hashtags, height=100, label_visibility="collapsed")
-            tags = [t for t in hashtags.split() if t.startswith("#")]
-            c1, c2, c3 = st.columns(3)
-            c1.metric("Total hashtag", len(tags))
-            c2.metric("Niche", detect_niche(segs).capitalize())
-            if c3.button("Generate Ulang"):
-                st.session_state["hashtags"] = generate_hashtags(segs, title)
-                st.rerun()
-        with t3:
-            niche = detect_niche(segs)
-            total_kw = sum(sum(1 for k in VIRAL_KEYWORDS if k in s["text"].lower()) for s in segs)
-            col_a, col_b = st.columns(2)
-            col_a.metric("Niche Konten", niche.upper())
-            col_b.metric("Kata Viral Terdeteksi", total_kw)
-            if total_kw >= 15:   st.success("Potensi viral tinggi!")
-            elif total_kw >= 7:  st.info("Potensi viral sedang.")
-            else:                st.warning("Kata viral sedikit — coba segmen lebih emosional.")
+    # ── HASHTAG & CAPTION — langsung keliatan, no tab needed ──────
+    niche    = detect_niche(segs)
+    emo_icon = {"komedi":"😂","horror":"👻","kaget":"😱","haru":"😢",
+                "drama":"🔥","motivasi":"💪","edukasi":"🤯"}.get(niche,"⭐")
+    total_kw = sum(sum(1 for k in VIRAL_KEYWORDS if k in s["text"].lower()) for s in segs)
+    viral_lv = "🔥 Tinggi" if total_kw>=15 else ("✅ Sedang" if total_kw>=7 else "⚠️ Rendah")
+    viral_cl = "#22c55e" if total_kw>=15 else ("#f59e0b" if total_kw>=7 else "#ef4444")
+
+    st.markdown(f"""
+<div style="background:#18181b;border:1px solid #27272a;border-radius:12px;padding:16px 20px;margin-bottom:12px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <div style="font-size:13px;font-weight:700;color:#f4f4f5">Auto Hashtag + Caption FYP</div>
+    <div style="display:flex;gap:8px">
+      <div style="background:#111115;border:1px solid #27272a;border-radius:6px;padding:3px 10px;font-size:11px;color:#a1a1aa">
+        {emo_icon} Niche: <strong style="color:#c4b5fd">{niche.upper()}</strong>
+      </div>
+      <div style="background:#111115;border:1px solid {viral_cl}44;border-radius:6px;padding:3px 10px;font-size:11px;color:{viral_cl}">
+        Viral: {viral_lv}
+      </div>
+    </div>
+  </div>
+</div>""", unsafe_allow_html=True)
+
+    col_ht, col_cap = st.columns([1, 1])
+    with col_ht:
+        st.markdown('<div style="font-size:11px;font-weight:600;color:#71717a;margin-bottom:6px">HASHTAG — salin ke caption</div>', unsafe_allow_html=True)
+        st.text_area("ht", hashtags, height=160, label_visibility="collapsed",
+                     help="Hashtag otomatis dari analisis konten + niche + kata viral transkripsi")
+        tags = [t for t in hashtags.split() if t.startswith("#")]
+        hc1, hc2, hc3 = st.columns(3)
+        hc1.metric("Total tag", len(tags))
+        hc2.metric("Kata viral", total_kw)
+        if hc3.button("Ulang Hashtag"):
+            st.session_state["hashtags"] = generate_hashtags(segs, title)
+            st.rerun()
+    with col_cap:
+        st.markdown('<div style="font-size:11px;font-weight:600;color:#71717a;margin-bottom:6px">CAPTION FYP — langsung paste</div>', unsafe_allow_html=True)
+        st.text_area("cap", caption_fyp, height=160, label_visibility="collapsed",
+                     help="Caption dengan CTA otomatis sesuai jam FYP sekarang")
+        if cw:
+            st.success(f"Jam FYP aktif — upload sekarang! ({cw['label']})")
+        else:
+            jam_str = f"{nw['range'][0]:02d}:00" if nw else "—"
+            st.info(f"Upload optimal pukul {jam_str} WIB")
 
     if words:
         with st.expander(f"Preview Transkripsi — {len(words)} kata | {len(segs)} segmen", expanded=False):

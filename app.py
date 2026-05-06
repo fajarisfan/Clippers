@@ -947,13 +947,38 @@ with st.sidebar:
         st.caption("Export dari Chrome: buka YouTube → login → ekstensi 'Get cookies.txt LOCALLY' → Export Netscape")
     cookies_up = st.file_uploader("Upload cookies.txt", type=["txt"])
     if cookies_up:
+        raw_bytes = cookies_up.read()
         with open(COOKIES_FILE, "wb") as fh:
-            fh.write(cookies_up.read())
+            fh.write(raw_bytes)
+        # Simpan isi cookies ke session_state biar bisa ditampilkan
+        st.session_state["cookies_raw"] = raw_bytes.decode("utf-8", errors="ignore")
         st.success("Cookies tersimpan!")
-        if IS_CLOUD:
-            with st.expander("Simpan permanen ke Secrets"):
-                st.markdown("Buka Streamlit Cloud → Settings → Secrets → tambahkan:\n```toml\n[cookies]\ncontent = \"\"\"\n<isi cookies.txt>\n\"\"\"\n```")
         st.rerun()
+
+    # Tampilkan isi cookies + tombol salin ke Secrets jika sudah ada
+    if os.path.exists(COOKIES_FILE):
+        try:
+            with open(COOKIES_FILE, "r", encoding="utf-8", errors="ignore") as fh:
+                _raw = fh.read().strip()
+        except Exception:
+            _raw = ""
+
+        if _raw and IS_CLOUD:
+            with st.expander("Salin isi cookies untuk Streamlit Secrets", expanded=False):
+                # Format langsung siap paste ke Secrets
+                _secrets_ready = f'''[cookies]
+content = """
+{_raw}
+"""'''
+                st.caption("Salin semua teks di bawah → paste ke Streamlit Cloud Settings → Secrets")
+                st.text_area(
+                    "secrets_content",
+                    value=_secrets_ready,
+                    height=180,
+                    label_visibility="collapsed",
+                    help="Select All (Ctrl+A) lalu Copy"
+                )
+                st.caption("Cara: Streamlit Cloud → App kamu → Settings → Secrets → paste → Save")
 
     st.divider()
     st.markdown('<div style="font-size:11px;font-weight:600;color:#52525b;text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Pengaturan Klip</div>', unsafe_allow_html=True)
